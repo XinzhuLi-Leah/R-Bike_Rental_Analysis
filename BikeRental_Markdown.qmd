@@ -1,0 +1,258 @@
+---
+title: "Rental Bikes Analysis"
+author: "Xinzhu Li"
+format: pdf
+editor: visual
+---
+
+# Importing data and data processing
+
+```{r}
+setwd("/Users/lixinzhu/Desktop/RData/R-bike_rental")
+bike_data <- read.csv("/Users/lixinzhu/Desktop/RData/R-bike_rental/hour.csv")
+
+head(bike_data)
+str(bike_data)
+summary(bike_data)
+sum(is.na(bike_data))
+bike_data$dteday <- as.Date(bike_data$dteday)
+```
+
+# Exploratory Data Analysis
+
+## Numbers of rentals by day
+
+By analyzing the daily frequency of bike rentals, it is evident that the time series exhibits clear trends and seasonality. Over the course of a year, the pattern shows an inverted U-shaped trend, with fewer rentals at the beginning and end of the year compared to the middle.
+
+```{r}
+daily_data <- aggregate(cnt ~ dteday, data = bike_data, sum)
+
+library(dplyr)
+library(ggplot2)
+rental_cnt_by_day <- bike_data %>% group_by(dteday) %>% summarize(cnt_day= sum(cnt))
+
+ggplot(rental_cnt_by_day, aes(x = dteday, y = cnt_day, group = 1)) +
+  geom_line() +
+  labs(title = "Daily Bike Rentals", x = "Date", y = "Total Rentals") +
+  theme_bw()
+
+```
+
+## Trends in casual and registered users
+
+Breaking down the daily bike rental time series into casual users and registered users reveals that the majority of bike users are registered. Both registered and casual users also display an inverted U-shaped seasonal pattern.
+
+```{r}
+library(dplyr)
+daily_data <- bike_data %>% group_by(dteday) %>% summarise(casual_total= sum(casual),registered_total=sum(registered))
+
+ggplot(daily_data, aes(x = dteday)) +
+  geom_line(aes(y = casual_total, color = "Casual")) +
+  geom_line(aes(y = registered_total, color = "Registered")) +
+  scale_y_continuous(sec.axis = sec_axis(~., name = "Registered")) +
+  labs(title = "Trending (casual vs registered)", x = "date", y = "count")
+```
+
+## Number of rentals in different months
+
+Now let’s analyze the monthly pattern. Across the 12 months of the year, we can clearly observe an inverted U-shaped trend as well. The peak in bike rental numbers occurs in May, June, July, August, and September, corresponding to the spring and summer seasons.
+
+```{r}
+rental_cnt_by_month <- bike_data %>%
+  group_by(mnth) %>%
+  summarize(cnt_month = sum(cnt))
+
+rental_cnt_by_month$mnth <- factor(rental_cnt_by_month$mnth, levels = 1:12)
+
+ggplot(rental_cnt_by_month, aes(x = mnth, y = cnt_month, fill=mnth)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Bike Rentals by Month", x = "Month", y = "Total Rentals") +
+  scale_x_discrete(breaks = 1:12)+
+  theme_bw()
+```
+
+## Rental numbers by hour (including seasonal divisions)
+
+Now let’s analyze the hourly pattern. Over the 24 hours in a day, we can generally observe two distinct peaks: one in the morning and another in the afternoon. These peaks typically correspond to commuting times when people head to work and return home.
+
+Additionally, we included a seasonal breakdown in our hourly analysis. Across the four seasons—spring, summer, fall, and winter—we found that the total number of bike rentals is generally higher in spring, summer, and fall compared to winter. Despite this variation in overall volume, the peak patterns remain consistent across seasons, aligning with morning and evening commuting times.
+
+```{r}
+rental_cnt_by_hour <- bike_data %>%
+  group_by(hr, season) %>%
+  summarize(cnt_hr = sum(cnt))
+
+ggplot(rental_cnt_by_hour, aes(x = hr, y = cnt_hr,fill = season)) +
+  geom_bar(stat = "identity") +
+  facet_wrap(~ season, scales = "free", ncol = 4) +  
+  labs(title = "Bike Rentals by Hour", x = "Hour of Day", y = "Total Rentals") +
+  scale_y_continuous(limits = c(0, 110000)) +
+  theme_bw()
+
+
+```
+
+## The proportion of temporary users and registered users in different time periods
+
+Now we are analyzing user data on an hourly basis, distinguishing between casual and registered users. The findings consistently show that, in general, registered users outnumber casual users across the entire day, regardless of the time period or specific hour.
+
+```{r}
+count_casual_registerd <- bike_data %>% group_by(hr) %>% summarise(cnt_registered = sum(registered), cnt_casual = sum(casual))
+
+ggplot(count_casual_registerd, aes(x = hr)) +
+  geom_bar(aes(y = cnt_registered, fill = "Registered"), stat = "identity", position = "stack") +
+  geom_bar(aes(y = cnt_casual, fill = "Casual"), stat = "identity", position = "stack") +
+  labs(title = "Bike Rentals by Hour and User Type", x = "Hour of Day", y = "Total Rentals") +
+  scale_fill_manual(values = c("Registered" = "blue", "Casual" = "orange")) +
+  theme_bw()
+```
+
+## Rental numbers in different weather conditions
+
+Moving on to the weather conditions analysis, the data clearly indicates a higher number of users on clear and dry days, with a noticeable decrease in user activity during rainy days. This trend aligns with our expectations, as we would typically anticipate fewer users during adverse weather conditions such as rain.
+
+```{r}
+
+bike_data$weathersit <- as.factor(bike_data$weathersit)
+
+bike_data$weathersit <- factor(bike_data$weathersit,
+                               levels=c(1:4),
+                               labels = c("Clear","Few clouds","Partly cloudy","Rainy"))
+
+ggplot(bike_data,aes(x=weathersit, y=cnt,fill=weathersit))+
+  geom_boxplot()+
+  labs(x="Wheather Condition",
+       y="Count",
+       title="Bike Rentals by Weather")
+
+```
+
+## Rental numbers in different seasons
+
+Next, we turn to the seasonal analysis. In the previous hourly analysis, we observed that spring, summer, and fall generally have higher user activity compared to winter. This seasonal analysis further confirms that summer attracts the highest number of users and bike rentals, followed by spring, then fall, with winter having the lowest activity.
+
+```{r}
+rental_cnt_by_season <- bike_data %>% group_by(season) %>% summarize(cnt_season= sum(cnt))
+
+rental_cnt_by_season$season <- factor(rental_cnt_by_season$season,
+                                      levels=c(1,2,3,4),
+                                      labels =c("winter","spring","summer","fall"))
+ggplot(rental_cnt_by_season,aes(x=season, y=cnt_season,fill = season))+
+  geom_bar(stat = "identity")+
+  labs(title = "Bike Rentals by Season", x = "Season", y = "Total Rentals")+
+  theme_bw()
+
+```
+
+## Seasons-ANOVA
+
+The results indicate that at least one season has a significantly different average value compared to the others. Using the Honest Significant Difference (HSD) test, we can compare these differences between seasons and identify which ones are statistically significant.
+
+```         
+•   Spring, summer, and autumn all have significantly higher average values compared to winter.
+
+•   Summer has a significantly higher average value than spring.
+
+•   Although autumn’s average value is lower than spring, the difference is not statistically significant.
+
+•   Finally, autumn has a significantly lower average value compared to summer.
+```
+
+This analysis clarifies the relationships and significant differences between the seasons.
+
+```{r}
+bike_data$season <- as.factor(bike_data$season)
+aov_result <- aov(cnt ~ season, data = bike_data)
+summary(aov_result)
+TukeyHSD(aov_result )
+
+```
+
+## Weather situations-ANOVA
+
+The results show that at least one weather condition is significantly different from the average value of other seasons.
+
+```{r}
+aov_result2 <- aov(cnt ~ weathersit, data = bike_data)
+summary(aov_result2) 
+TukeyHSD(aov_result2) 
+```
+
+# Time series analysis
+
+## S-ARIMA
+
+An interesting point is that while the numbers generated by the model are crucial, the graphical validation provides a more intuitive understanding. From the predicted curve, we can observe that it aligns with the seasonal trends of the past, reflecting the upward half of a reverse U-shape. Moreover, the predicted trend is validated by the fact that the total rentals in the past two years have shown a year-on-year increase, indicating that the forecast for the third year should be slightly higher than that of the previous two years.
+
+```{r}
+daily_data <- aggregate(cnt ~ dteday, data = bike_data, sum)
+head(daily_data)
+
+library(xts)
+library(tseries)
+str(daily_data)
+# Use ts function to create a time series
+ts<- ts(daily_data$cnt, start = c(2011, 1), frequency = 365)
+plot(ts)
+
+plot(ts)
+adf.test(ts) # Non-stationary
+
+ts_d1 <- diff(ts, differences = 1)
+ts_d1 <- na.omit(ts_d1)
+adf.test(ts_d1) # Stationary
+plot(ts_d1)
+
+# White noise test - The result shows p < 0.05, reject the null hypothesis (the null hypothesis is that the series is white noise), the series is not white noise, and further steps can be performed
+for(k in 1:4)print(Box.test(ts_d1,lag=1*k))
+
+
+# Check ACF and PACF
+acf(ts_d1, main = "ACF ") 
+pacf(ts_d1, main = "PACF ")   
+
+# ARIMA model fitting - Automatically selects the best model
+library(forecast)
+auto_model <- auto.arima(ts, seasonal = TRUE)
+summary(auto_model) 
+
+
+#Model diagnostics (white noise test, etc.) - The null hypothesis is white noise. The result shows p > 0.05, residuals are white noise, indicating that the model has extracted the information sufficiently.
+for(k in 1:3)print(Box.test(auto_model$residuals,lag=1*k))
+checkresiduals(auto_model)
+
+#forecasting
+forecast_values <- forecast(auto_model, h = 60)  
+
+autoplot(forecast_values) +
+  xlab("Date") +
+  ylab("Count") +
+  ggtitle("Bikes Forecasting with ARIMA Model 60days") +
+  theme_minimal()
+
+show(forecast_values)
+
+```
+
+## Holt-winters Three-Parameter Exponential Smoothing
+
+The black line in the first chart represents the original input time series, while the red line illustrates the model’s fit to the training dataset.
+
+Based on the previous S-ARIMA model and the Holt-Winters three-parameter model, we observe that both models predict the same general upward trend for the third year. However, we might consider the S-ARIMA model as more suitable for this data, as it accounts for both seasonality, which follows a reversed U-shape, and a trend, with a year-on-year increase in bike rentals. Given this, the predicted data for the first part of the third year should logically be higher than that of the second year. From a quick visual comparison of the charts, it appears that the S-ARIMA model might be a better fit for the data.
+
+```{r}
+x.fit <- HoltWinters(ts)
+plot(x.fit)
+x.fore <- forecast(x.fit,h=60)
+x.fore
+autoplot(x.fore ) +
+  labs(title = "Holt-Winters Forecast 60days", x = "Date", y = "Rentals")
+```
+
+## Time series model comparison
+
+```{r}
+accuracy(forecast(auto_model))
+accuracy(forecast(x.fit))
+#SARIMA better
+```
